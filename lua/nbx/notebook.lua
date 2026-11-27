@@ -667,11 +667,11 @@ function M.ensure_kernel(st, cb)
     return go(st.choice)
   end
   local dir = vim.fn.fnamemodify(st.path, ":h")
-  local venv = kernel.find_venv(dir)
-  if venv then
-    return go(venv)
+  local env = kernel.find_env(dir)
+  if env then
+    return go(env)
   end
-  -- No virtualenv nearby: look at the installed kernelspecs before deciding.
+  -- No environment nearby: look at the installed kernelspecs before deciding.
   local k = sidecar(st)
   local ok, err = k:spawn()
   if not ok then
@@ -834,6 +834,7 @@ function M.select_kernel(st)
           and active.kind == choice.kind
           and active.python == choice.python
           and active.name == choice.name
+          and active.cwd == choice.cwd
         return (same and "● " or "  ") .. choice.label
       end,
     }, function(choice)

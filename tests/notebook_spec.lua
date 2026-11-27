@@ -236,3 +236,43 @@ describe("rendering", function()
     assert.equals("Base", chunks[2][2][1])
   end)
 end)
+
+describe("kernel discovery", function()
+  local kernel = require("nbx.kernel")
+
+  local function tree(files)
+    local root = vim.uv.fs_realpath(vim.fn.fnamemodify(vim.fn.tempname(), ":h")) .. "/nbx-" .. vim.uv.hrtime()
+    for _, file in ipairs(files) do
+      local path = root .. "/" .. file
+      vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+      vim.fn.writefile({ "#!/bin/sh" }, path)
+      vim.fn.setfperm(path, "rwxr-xr-x")
+    end
+    return root
+  end
+
+  it("uses the nearest virtualenv", function()
+    local root = tree({ ".venv/bin/python", "pkg/notebooks/x" })
+    local env = kernel.find_env(root .. "/pkg/notebooks")
+    assert.equals("venv", env.kind)
+    assert.equals(root .. "/.venv/bin/python", env.python)
+  end)
+
+  it("stops at the repository root", function()
+    local root = tree({ ".venv/bin/python", "repo/.git/HEAD", "repo/notebooks/x" })
+    assert.is_nil(kernel.find_env(root .. "/repo/notebooks"))
+  end)
+
+  it("prefers a closer uv project over a virtualenv further up", function()
+    if vim.fn.executable("uv") ~= 1 then
+      return
+    end
+    local root = tree({ ".venv/bin/python", "project/pyproject.toml", "project/sub/x" })
+    local env = kernel.find_env(root .. "/project/sub")
+    assert.equals("uv", env.kind)
+    assert.equals(root .. "/project", env.cwd)
+    local params = kernel.start_params(env, root .. "/project/sub")
+    assert.equals(root .. "/project/sub", params.cwd)
+    assert.same({ "uv", "run", "--project", root .. "/project" }, vim.list_slice(params.argv, 1, 4))
+  end)
+end)

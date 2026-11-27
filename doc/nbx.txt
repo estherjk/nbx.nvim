@@ -111,9 +111,11 @@ KERNELS                                                          *nbx-kernels*
 A kernel starts the first time a cell is run. It is chosen in this order:
 
   1. the kernel picked earlier for this notebook (`:Nbx kernel`)
-  2. the nearest `.venv` or `venv` at or above the notebook
+  2. the notebook's project environment: the nearest `.venv` or `venv`, or
+     the nearest uv project (`pyproject.toml` or `uv.lock`). The search goes
+     up from the notebook and stops at the repository root.
   3. the kernelspec named in the notebook, if installed
-  4. a temporary kernel through `uv run --with ipykernel`
+  4. a temporary environment through `uv run --with ipykernel`
   5. `python3`
 
 If the chosen interpreter has no `ipykernel`, nbx offers to install it.

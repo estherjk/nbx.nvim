@@ -32,9 +32,9 @@ train(model)
 - **Output under each cell**: streamed stdout/stderr, results, coloured
   tracebacks, progress bars, `input()` prompts, and inline images in terminals
   that speak the kitty graphics protocol (Rex, Ghostty, kitty).
-- **Kernels without setup.** Uses the nearest `.venv`, offers to install
-  `ipykernel` if it is missing, and can fall back to a temporary kernel through
-  `uv`. Installed kernelspecs work too.
+- **Kernels without setup.** Uses the project's `.venv` or uv project, offers
+  to install `ipykernel` if it is missing, and can fall back to a temporary
+  environment through `uv`. Installed kernelspecs work too.
 - **Rex actions** for restart, interrupt, run all, kernel picker and kernel log.
 
 Scope: Python kernels, local only. No ipywidgets, no remote Jupyter servers.
@@ -118,10 +118,17 @@ say) it is reloaded when the buffer has no unsaved changes.
 
 ### Kernels
 
-The first time you run a cell, nbx picks, in order: the kernel you chose
-earlier for this notebook, the nearest `.venv` or `venv` at or above the
-notebook, the kernelspec named in the notebook if it is installed, a temporary
-`uv` kernel, then `python3`. `<localleader>k` lists all of them.
+The first time you run a cell, nbx picks, in order:
+
+1. the kernel you chose earlier for this notebook
+2. the notebook's project environment: the nearest `.venv` or `venv`, or the
+   nearest uv project (`pyproject.toml` or `uv.lock`), which uv then sets up.
+   The search goes up from the notebook and stops at the repository root.
+3. the kernelspec named in the notebook, if it is installed
+4. a temporary `uv` environment
+5. `python3`
+
+`<localleader>k` lists all of them.
 
 The kernel's working directory is the notebook's directory. The kernel stops
 when the buffer is closed or Neovim exits.

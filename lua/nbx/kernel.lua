@@ -28,6 +28,7 @@ end
 ---@class nbx.KernelChoice
 ---@field kind "venv"|"python"|"spec"|"uv"
 ---@field label string
+---@field cwd? string uv only: the project directory whose environment to use
 ---@field python? string
 ---@field name? string
 
@@ -38,24 +39,41 @@ local function python_in(prefix)
   end
 end
 
---- Nearest virtual environment at or above a directory.
+local PROJECT_FILES = { "pyproject.toml", "uv.lock" }
+
+--- The Python environment a notebook in `dir` belongs to: the nearest
+--- virtualenv, or the nearest uv project that has not been synced yet. The
+--- search stops at the repository root and never leaves the home directory,
+--- so an unrelated environment further up is not picked up by accident.
 ---@param dir string
 ---@return nbx.KernelChoice?
-function M.find_venv(dir)
+function M.find_env(dir)
   local dirs = { dir }
   for parent in vim.fs.parents(dir) do
     dirs[#dirs + 1] = parent
   end
+  local home = vim.uv.os_homedir()
+  local has_uv = vim.fn.executable("uv") == 1
   for _, d in ipairs(dirs) do
-    for _, name in ipairs({ ".venv", "venv" }) do
-      local python = python_in(d .. "/" .. name)
+    if d == home then
+      break
+    end
+    local name = vim.fn.fnamemodify(d, ":t")
+    for _, venv in ipairs({ ".venv", "venv" }) do
+      local python = python_in(d .. "/" .. venv)
       if python then
-        return {
-          kind = "venv",
-          python = python,
-          label = vim.fn.fnamemodify(d, ":t") .. "/" .. name,
-        }
+        return { kind = "venv", python = python, label = name .. "/" .. venv }
       end
+    end
+    if has_uv then
+      for _, file in ipairs(PROJECT_FILES) do
+        if vim.uv.fs_stat(d .. "/" .. file) then
+          return { kind = "uv", cwd = d, label = "uv (" .. name .. " project)" }
+        end
+      end
+    end
+    if vim.uv.fs_stat(d .. "/.git") then
+      break
     end
   end
 end
@@ -66,15 +84,15 @@ end
 function M.candidates(dir, specs)
   local list, seen = {}, {}
   local function add(choice)
-    local key = choice.python or (choice.kind .. ":" .. (choice.name or ""))
+    local key = choice.python or (choice.kind .. ":" .. (choice.name or choice.cwd or ""))
     if choice and not seen[key] then
       seen[key] = true
       list[#list + 1] = choice
     end
   end
-  local venv = M.find_venv(dir)
-  if venv then
-    add(venv)
+  local env = M.find_env(dir)
+  if env then
+    add(env)
   end
   for _, var in ipairs({ "VIRTUAL_ENV", "CONDA_PREFIX" }) do
     local prefix = vim.env[var]
@@ -89,7 +107,7 @@ function M.candidates(dir, specs)
     add({ kind = "spec", name = name, label = specs[name].display_name .. " (kernelspec " .. name .. ")" })
   end
   if vim.fn.executable("uv") == 1 then
-    add({ kind = "uv", label = "uv (project environment + temporary ipykernel)" })
+    add({ kind = "uv", label = "uv (temporary environment with ipykernel)" })
   end
   local system = vim.fn.exepath("python3")
   if system ~= "" then
@@ -104,9 +122,9 @@ end
 ---@param specs? table
 ---@return nbx.KernelChoice?
 function M.default_choice(dir, metadata_name, specs)
-  local venv = M.find_venv(dir)
-  if venv then
-    return venv
+  local env = M.find_env(dir)
+  if env then
+    return env
   end
   if metadata_name and specs and specs[metadata_name] then
     return { kind = "spec", name = metadata_name, label = specs[metadata_name].display_name }
@@ -171,7 +189,12 @@ function M.start_params(choice, cwd)
     params.name = choice.name
     params.env = { PATH = path }
   elseif choice.kind == "uv" then
-    params.argv = vim.list_extend({ "uv", "run", "--with", "ipykernel", "python" }, LAUNCH)
+    -- Runs in the notebook's directory; --project points uv at the environment.
+    local uv_run = { "uv", "run" }
+    if choice.cwd then
+      vim.list_extend(uv_run, { "--project", choice.cwd })
+    end
+    params.argv = vim.list_extend(vim.list_extend(uv_run, { "--with", "ipykernel", "python" }), LAUNCH)
     params.env = { PATH = path }
     params.unset = { "VIRTUAL_ENV" }
   else
