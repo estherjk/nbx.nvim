@@ -8,18 +8,7 @@ controls are also exposed as Rex actions, so you can restart or interrupt a
 kernel from Rex's command palette or a Rex shortcut. Rex is optional; the
 plugin works in any terminal.
 
-```
-── markdown ───────────────────────────────────────────
-# Sine waves
-A short note about what follows.
-── [1] ✓ 230ms ────────────────────────────────────────
-import numpy as np
-np.sin(np.pi / 2)
-│ np.float64(1.0)
-── [*] ● running ──────────────────────────────────────
-train(model)
-│ epoch 3/10  loss 0.412
-```
+https://github.com/user-attachments/assets/08108fea-8a8f-4cb5-bedd-4b908be2b226
 
 ## Features
 
