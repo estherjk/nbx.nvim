@@ -102,17 +102,35 @@ describe("kernel", function()
     vim.cmd("silent edit " .. vim.fn.fnameescape(path))
     local st = nb.get()
     st.choice = { kind = "uv", label = "uv" }
-    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "# %%", "import time", "time.sleep(60)" })
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+      "# %%",
+      "import time",
+      "print('sleeping', flush=True)",
+      "time.sleep(60)",
+    })
     nb.run_all(st)
     local state = st.layout[1].state
-    wait("the cell to start", function()
-      return state.status == "running"
+    -- "running" is reported before the code starts, so wait for the code itself
+    -- to say it is sleeping; an interrupt that lands earlier is not this test.
+    wait("the cell to start sleeping", function()
+      for _, output in ipairs(state.outputs) do
+        if output.output_type == "stream" and ipynb.text(output.text):find("sleeping", 1, true) then
+          return true
+        end
+      end
+      return false
     end)
     nb.interrupt(st)
     wait("the interrupt", function()
       return idle(st)
     end, 20000)
     assert.equals("error", state.result)
-    assert.equals("KeyboardInterrupt", state.outputs[1].ename)
+    -- The kernel may also print to stderr (debugger warnings, for example),
+    -- so look for the error output rather than assuming its position.
+    local errors = vim.tbl_filter(function(output)
+      return output.output_type == "error"
+    end, state.outputs)
+    assert.equals(1, #errors)
+    assert.equals("KeyboardInterrupt", errors[1].ename)
   end)
 end)
