@@ -1,0 +1,9 @@
+# Tooling config only. The sidecar (python/nbx_kernel.py) declares its own
+# dependencies inline and is run with `uv run --script`.
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E402"]

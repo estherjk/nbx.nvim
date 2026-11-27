@@ -1,0 +1,95 @@
+#!/bin/sh
+# nbx - drive the notebook that is open in a running Neovim.
+#
+# Neovim records its server address under $XDG_STATE_HOME/nbx/servers when a
+# notebook is opened (see lua/nbx/remote.lua). This script looks the address up
+# and asks that Neovim to run a notebook action.
+set -eu
+
+usage() {
+  cat <<'USAGE'
+Usage: nbx ACTION [--block ID] [--server ADDRESS]
+
+Actions:
+  status            show the notebook and its kernel state
+  restart           restart the kernel
+  restart-run-all   restart the kernel, then run every cell
+  interrupt         interrupt the running cell
+  run-all           run every cell
+  run               run the cell under the cursor
+  clear-all         clear all outputs
+  kernel            open the kernel picker
+  log               show the kernel log
+  shutdown          shut the kernel down
+
+Any other notebook action name (see :Nbx <Tab> in Neovim) works too.
+
+Options:
+  --block ID        target the Neovim running in this Rex pane
+                    (default: $REX_BLOCK, then the most recent Neovim)
+  --server ADDRESS  target this Neovim server address directly
+USAGE
+}
+
+dir="${XDG_STATE_HOME:-$HOME/.local/state}/nbx/servers"
+block="${REX_BLOCK:-}"
+server=""
+action=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --block) block="${2:-}"; shift 2 ;;
+    --server) server="${2:-}"; shift 2 ;;
+    -h | --help) usage; exit 0 ;;
+    -*) echo "nbx: unknown option $1" >&2; exit 2 ;;
+    *) action="$1"; shift ;;
+  esac
+done
+
+if [ -z "$action" ]; then
+  usage >&2
+  exit 2
+fi
+case "$action" in
+  *[!a-z_-]*) echo "nbx: invalid action: $action" >&2; exit 2 ;;
+esac
+
+nvim_bin=""
+
+# Read a registry file (line 1: server address, line 2: the nvim binary). Sets
+# $server and $nvim_bin if that Neovim is still there; forgets the entry if not.
+load() {
+  [ -f "$1" ] || return 1
+  addr=$(sed -n 1p "$1")
+  if [ -S "$addr" ]; then
+    server="$addr"
+    nvim_bin=$(sed -n 2p "$1")
+    return 0
+  fi
+  rm -f "$1"
+  return 1
+}
+
+if [ -z "$server" ] && [ -n "$block" ]; then
+  key=$(printf '%s' "$block" | sed 's/[^A-Za-z0-9-]/_/g')
+  load "$dir/$key" || true
+fi
+if [ -z "$server" ] && [ -d "$dir" ]; then
+  for name in $(ls -t "$dir"); do
+    load "$dir/$name" && break
+  done
+fi
+if [ -z "$server" ]; then
+  echo "nbx: no Neovim with a notebook open was found" >&2
+  exit 1
+fi
+
+if [ -z "$nvim_bin" ] || [ ! -x "$nvim_bin" ]; then
+  nvim_bin=nvim
+fi
+
+out=$("$nvim_bin" --server "$server" --remote-expr "v:lua.require'nbx.remote'.call('$action')")
+case "$out" in
+  error:*) echo "nbx: ${out#error: }" >&2; exit 1 ;;
+  *) echo "$out" ;;
+esac

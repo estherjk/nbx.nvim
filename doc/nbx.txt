@@ -1,0 +1,152 @@
+*nbx.txt*  Jupyter notebooks in Neovim
+
+==============================================================================
+CONTENTS                                                                 *nbx*
+
+  Usage ........................ |nbx-usage|
+  Commands ..................... |nbx-commands|
+  Mappings ..................... |nbx-mappings|
+  Configuration ................ |nbx-config|
+  Kernels ...................... |nbx-kernels|
+  Rex and the CLI .............. |nbx-rex|
+  Lua API ...................... |nbx-api|
+
+==============================================================================
+USAGE                                                              *nbx-usage*
+
+Open an `.ipynb` file. It is shown as one Python buffer in which marker lines
+separate the cells: >
+
+  # %%                 code cell
+  # %% [markdown]      markdown cell (text kept as comments)
+  # %% [raw]           raw cell
+<
+Markers are drawn as cell borders. Typing a marker starts a new cell. Output
+appears under each code cell. |:write| saves source and outputs back to the
+notebook in the format Jupyter uses.
+
+Run `:checkhealth nbx` to check requirements.
+
+==============================================================================
+COMMANDS                                                        *nbx-commands*
+
+                                                                        *:Nbx*
+:Nbx {action} [{arg}]   Run a notebook action. Without arguments, show the
+                        kernel status.
+
+Actions:
+  run, run_and_next, run_all, run_above, run_below
+  add_below, add_above, add_markdown
+  toggle_type [code|markdown|raw]
+  delete, move_up, move_down, split, merge
+  open_output, clear, clear_all
+  interrupt, restart, restart_run_all, shutdown, kernel, log
+  next_cell, prev_cell
+  redraw                  send images to the terminal again and redraw
+  status
+
+==============================================================================
+MAPPINGS                                                        *nbx-mappings*
+
+Buffer-local, set for notebook buffers only.
+
+  <S-CR>            run cell and move to the next
+  <C-CR>            run cell
+  <localleader>rr   run cell
+  <localleader>ra   run all cells
+  <localleader>rk   run cells above
+  <localleader>rj   run this cell and those below
+  <localleader>a    add code cell below
+  <localleader>A    add code cell above
+  <localleader>M    add markdown cell below
+  <localleader>m    toggle between code and markdown
+  <localleader>d    delete cell
+  <localleader>J    move cell down
+  <localleader>K    move cell up
+  <localleader>s    split cell at the cursor
+  <localleader>j    merge with the cell below
+  <localleader>o    open the full output in a split
+  <localleader>c    clear output of the cell
+  <localleader>C    clear all outputs
+  <localleader>i    interrupt kernel
+  <localleader>R    restart kernel
+  <localleader>k    select kernel
+  <localleader>l    show kernel log
+  ]c  [c            next / previous cell
+  ic  ac            text objects: cell contents / whole cell
+
+==============================================================================
+CONFIGURATION                                                     *nbx-config*
+
+Calling setup is optional. Defaults: >lua
+
+  require("nbx").setup({
+    kernel = {
+      sidecar_cmd = nil,  -- command (list) that starts python/nbx_kernel.py
+      timeout = 60,       -- seconds to wait for a kernel
+      autostart = false,  -- start a kernel when a notebook is opened
+    },
+    output = {
+      max_lines = 30,     -- text lines shown under a cell
+    },
+    images = {
+      enabled = "auto",   -- true, false or "auto"
+      max_width = 80,     -- columns
+      max_height = 24,    -- rows
+    },
+    keys = { ... },       -- action name -> lhs or { lhs, mode = ... }
+  })
+<
+Set `keys.<action> = false` to drop one mapping, or `keys = false` to define
+none. Action names are those of |:Nbx|, plus `inner_cell` and `around_cell`.
+
+Highlight groups: NbxCellBorder, NbxCellLabel, NbxCellType, NbxRunning,
+NbxQueued, NbxOk, NbxError, NbxOutput, NbxStderr, NbxOutputBorder,
+NbxOutputMore, NbxMarkdown, NbxMdH1..NbxMdH6, NbxMdBold, NbxMdItalic,
+NbxMdCode, NbxMdFence, NbxMdLink, NbxMdBullet, NbxMdQuote.
+
+==============================================================================
+KERNELS                                                          *nbx-kernels*
+
+A kernel starts the first time a cell is run. It is chosen in this order:
+
+  1. the kernel picked earlier for this notebook (`:Nbx kernel`)
+  2. the nearest `.venv` or `venv` at or above the notebook
+  3. the kernelspec named in the notebook, if installed
+  4. a temporary kernel through `uv run --with ipykernel`
+  5. `python3`
+
+If the chosen interpreter has no `ipykernel`, nbx offers to install it.
+
+Kernels are managed by a small Python process, python/nbx_kernel.py, started
+with `uv run --script` (or `python3`, which then needs `jupyter_client`).
+Its log, including anything the kernel prints outside the notebook, is under
+`stdpath("log")/nbx/` and opens with `:Nbx log`.
+
+==============================================================================
+REX AND THE CLI                                                      *nbx-rex*
+
+`rex/nbx.lua` defines Rex actions that act on the Neovim in the focused pane.
+In `~/.config/rex/init.lua`: >lua
+
+  local nbx = dofile("/path/to/nbx.nvim/rex/nbx.lua")
+  nbx.setup({
+    keys = { ["ctrl+alt+r"] = "restart", ["ctrl+alt+i"] = "interrupt" },
+  })
+<
+Options: `keys` (Rex key -> action), `bin` (path to the nbx script), `path`
+(PATH for the script, if needed).
+
+`bin/nbx ACTION [--block ID] [--server ADDRESS]` runs an action from a shell.
+It finds Neovim through files in `$XDG_STATE_HOME/nbx/servers`, written when
+a notebook is opened.
+
+==============================================================================
+LUA API                                                              *nbx-api*
+
+require("nbx").setup({opts})           Configure. See |nbx-config|.
+require("nbx").run({action}, {buf})    Run an action; returns ok, err.
+require("nbx").status()                Kernel summary for a statusline.
+require("nbx").is_notebook({buf})      Is this buffer a notebook?
+
+ vim:tw=78:ts=8:ft=help:norl:

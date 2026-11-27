@@ -1,0 +1,6 @@
+.deps/
+doc/tags
+__pycache__/
+*.nbx-tmp
+.venv/
+.ipynb_checkpoints/
