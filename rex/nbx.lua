@@ -50,6 +50,20 @@ function M.setup(opts)
       category = "Notebook",
       keywords = "jupyter nbx kernel ipynb",
       run = function(ctx)
+        -- The pane lives on another Rex server (a remote host): the Neovim and
+        -- its kernel are over there, so hand the action to that server's copy.
+        if ctx.server then
+          local r, err = rex.server(ctx.server).call("client.action", {
+            action = "nbx_" .. name,
+            session_id = ctx.session_id,
+            block_id = ctx.block_id,
+            origin = ctx.origin == "key" and "key" or ctx.origin == "palette" and "palette" or nil,
+          })
+          if r == nil then
+            error(("nbx on %s: %s"):format(ctx.server, tostring(err)), 0)
+          end
+          return r.result
+        end
         local argv = { bin, name }
         if ctx.block_id then
           argv[#argv + 1] = "--block"
